@@ -1,0 +1,1222 @@
+Queueing Multiple Downloads, looking for a producer consumer API
+stackoverflow.com/questions/6480726/queueing-multiple-downloads-looking-for-a-producer-consumer-api
+
+I have an application (a servlet, but that's not very important) that downloads a set of files and parse them to 
+extract information. Up to now, I did those operations in a loop : - fetching new file on the Internet - analyzing 
+it.
+
+A multi-threaded download-manager seems a better solution for this problem and I would like to implement it in the 
+fastest way possible.
+
+Some of the downloads are dependant from others (so, this set is partially ordered).
+
+Mutli-threaded programming is hard and if I could find an API to do that I would be quite happy. I need to put a 
+group of files (ordered) in a queue and get the first group of files that is completely downloaded.
+
+Do you know of any library I could use to achieve that ?
+
+Regards, Stéphane
+
+asked Jun 25 '11 at 21:44
+Snicolas
+
+30.8k1087157
+1 Answer 1
+up vote 2 down vote accepted
+
+You could do something like:
+
+BlockingQueue<Download> queue = new BlockingQueue<Download>();
+ExecutorService pool = Executors.newFixedThreadPool(5);
+Download obj = new Download(queue); 
+pool.execute(obj); //start download and place on queue once completed
+Data data = queue.take(); //get completely downloaded item
+
+You may have to use a different kind of queue if the speed of each download is not the same. BlockingQueue is first 
+in first out I believe.
+
+You may want to look into using a PriorityBlockingQueue which will order the Download objects according to their 
+Comparable method. See the API here for more details.
+
+Hope this helps.
+
+
+------------------------------------------------------------------------
+
+
+
+The fastest way to fetch multiple web pages in Java
+Ask Question
+up vote 6 down vote favorite
+4
+
+I'm trying to write a fast HTML scraper and at this point I'm just focusing on maximizing my throughput without 
+parsing. I have cached the IP addresses of the URLs:
+
+public class Data {
+    private static final ArrayList<String> sites = new ArrayList<String>();
+    public static final ArrayList<URL> URL_LIST = new ArrayList<URL>();
+    public static final ArrayList<InetAddress> ADDRESSES = new ArrayList<InetAddress>();
+
+    static{
+        /*
+        add all the URLs to the sites array list
+        */
+
+        // Resolve the DNS prior to testing the throughput 
+        for(int i = 0; i < sites.size(); i++){
+
+            try {
+                URL tmp = new URL(sites.get(i));
+                InetAddress address = InetAddress.getByName(tmp.getHost());
+                ADDRESSES.add(address);
+                URL_LIST.add(new URL("http", address.getHostAddress(), tmp.getPort(), tmp.getFile()));
+                System.out.println(tmp.getHost() + ": " + address.getHostAddress());
+            } catch (MalformedURLException e) {
+            } catch (UnknownHostException e) {
+            }
+        }
+    }
+}
+
+My next step was to test the speed with 100 URLs by fetching them from the internet, reading the first 64KB and 
+moving on to the next URL. I create a thread pool of FetchTaskConsumer's and I've tried running multiple threads 
+(16 to 64 on a i7 Quad Core machine), here is how each consumer looks:
+
+public class FetchTaskConsumer implements Runnable{
+    private final CountDownLatch latch;
+    private final int[] urlIndexes;
+    public FetchTaskConsumer (int[] urlIndexes, CountDownLatch latch){
+        this.urlIndexes = urlIndexes;
+        this.latch = latch;
+    }
+
+    @Override
+    public void run() {
+
+        URLConnection resource;
+        InputStream is = null;
+        for(int i = 0; i < urlIndexes.length; i++)
+        {
+            int numBytes = 0;
+            try {                   
+                resource = Data.URL_LIST.get(urlIndexes[i]).openConnection();
+
+                resource.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+                is = resource.getInputStream();
+
+                while(is.read()!=-1 && numBytes < 65536 )
+                {
+                    numBytes++;
+                }
+
+            } catch (IOException e) {
+                System.out.println("Fetch Exception: " + e.getMessage());
+            } finally {
+
+                System.out.println(numBytes + " bytes for url index " + urlIndexes[i] + "; remaining: " + remaining.decrementAndGet());
+                if(is!=null){
+                    try {
+                        is.close();
+                    } catch (IOException e1) {/*eat it*/}
+                }
+            }
+        }
+
+        latch.countDown();
+    }
+}
+
+At best I'm able to go through the 100 URLs in about 30 seconds, but the literature suggests that I should be able 
+to go through 300150 URLs per second. Note that I have access to Gigabit Ethernet, although I'm currently running 
+the test at home on my 20 Mbit connection... in either case, the connection is never really being fully utilized.
+
+I've tried directly using Socket connections, but I must be doing something wrong, because that's even slower! Any 
+suggestions on how I can improve the throughput?
+
+P.S.
+I have a list of about 1 million popular URLs, so I can add more URLs if 100 is not enough to benchmark.
+
+Update:
+The literature I'm referring is the papers relating to the Najork Web Crawler, Najork states:
+
+    Processed 891 million URLs in 17 Days
+    That is ~ 606 downloads per second [on] 4 Compaq DS20E Alpha Servers [with] 4 GB main memory[,] 650 GB disk 
+space [and] 100 MBit/sec.
+    Ethernet ISP rate-limits bandwidth to 160Mbits/sec
+
+So it's actually 150 pages per second, not 300. My computer is Core i7 with 4 GB RAM and I'm nowhere near close to 
+that. I didn't see anything stating what they used in particular.
+
+Update:
+OK, tally up... the final results are in! It turns out that 100 URLs is a bit too low for a benchmark. I bumped it 
+up to 1024 URLs, 64 threads, I set a timeout of 2 seconds for each fetch and I was able to get up to 21 pages per 
+second (in reality my connection is about 10.5 Mbps, so 21 pages per second * 64KB per page is about 10.5 Mbps). 
+Here is what the fetcher looks like:
+
+public class FetchTask implements Runnable{
+    private final int timeoutMS = 2000;
+    private final CountDownLatch latch;
+    private final int[] urlIndexes;
+    public FetchTask(int[] urlIndexes, CountDownLatch latch){
+        this.urlIndexes = urlIndexes;
+        this.latch = latch;
+    }
+
+    @Override
+    public void run() {
+
+        URLConnection resource;
+        InputStream is = null;
+        for(int i = 0; i < urlIndexes.length; i++)
+        {
+            int numBytes = 0;
+            try {                   
+                resource = Data.URL_LIST.get(urlIndexes[i]).openConnection();
+
+                resource.setConnectTimeout(timeoutMS);
+
+                resource.setRequestProperty("User-Agent", "Mozilla/5.0");
+
+                is = resource.getInputStream();
+
+                while(is.read()!=-1 && numBytes < 65536 )
+                {
+                    numBytes++;
+                }
+
+            } catch (IOException e) {
+                System.out.println("Fetch Exception: " + e.getMessage());
+            } finally {
+
+                System.out.println(numBytes + "," + urlIndexes[i] + "," + remaining.decrementAndGet());
+                if(is!=null){
+                    try {
+                        is.close();
+                    } catch (IOException e1) {/*eat it*/}
+                }
+            }
+        }
+
+        latch.countDown();
+    }
+}
+
+java performance url web-crawler
+share|improve this question
+edited Apr 16 '11 at 23:56
+asked Apr 16 '11 at 17:30
+Kiril
+26.7k22134203
+
+    setting a browser useragent for a scraper is not good practice. – Mat Apr 16 '11 at 17:36
+    Literature? You mean to say javadocs? I can't find anything about 300 URLs per second related to URLConnection. 
+– Babar Apr 16 '11 at 17:44
+    URLConnection mostly gets a page per 500ms, java is quite slow in that purpose – Thomas Jungblut Apr 16 '11 at 
+17:59
+    @Mat, sometimes I have to impersonate a browser because web sites may change their content depending if the 
+page is being served to a browser or a bot and if I'm scraping for content, then I don't want to miss content that 
+would be valuable to users. I still comply with the robots.text tho. – Kiril Apr 16 '11 at 18:00
+    @Lirik: the sites that do that do it on purpose. You could very well be violating their usage policies. – Mat 
+Apr 16 '11 at 18:02
+
+ |  show 3 more comments
+2 Answers
+active oldest votes
+up vote 2 down vote accepted
+
+Are you sure of your sums?
+
+300 URLs per second, each URL reading 64 kilo bytes
+
+That requires: 300 x 64 = 19,200 kilo bytes / second
+
+Converting to bits: 19,200 kilo bytes / second = ( 8 * 19,200 ) kilo bits / second
+
+So we have: 8*19,200 = 153,600 kilo bits / second
+
+Then to Mb/s: 153,600 / 1024 = 150 mega bits / second
+
+... and yet you only have a 20 Mb/s channel.
+
+However, I imagine many of the URLs you are fetching are under 64Kb in size, hence the through put appears faster 
+than your channel. You are not slow, you are fast!
+share|improve this answer
+answered Apr 16 '11 at 17:58
+Simon G.
+4,8441421
+
+    even at 20 MB/s (my home connection) I should at least be able to max it out with 40 pages per second... I'm 
+nowhere near close to that (100 URLs in 30 seconds, that's about 3 pages per second)! I also have access to a 100 
+Mbps connection, but I'll be glad if I can max my home connection before going to 100 Mbps. – Kiril Apr 16 '11 at 
+18:15
+    My apologies - I focused more on your expectations than your achievements. I will see what I can figure out. – 
+Simon G. Apr 16 '11 at 19:34
+    it's a good point none the less... even if it doesn't really answer my question :). Now I'm looking at Nutch 
+and how they manage to fetch so many URLs without running into the same problem as me. Perhaps they're not using 
+URLConnection... – Kiril Apr 16 '11 at 20:16
+
+add a comment | 
+up vote 1 down vote
+
+Focusing on your achievements this time. I tried using your code myself and found I also got about 3 pages per 
+second accessing major sites. If I accessed my own webserver downloading static pages however, I maxed my system.
+
+On the internet today, a major site typically takes more than a second to generate a page. Having looked at the 
+packets they are sending me just now, the page is arriving in multiple TCP/IP packets. From here in the UK, it 
+takes 3 seconds to download www.yahoo.co.jp, 2 seconds to download amazon.com, but facebook.com takes less than 
+0.1 seconds. The difference is that the facebook.com front page is static whereas the other two are dynamic. For 
+humans the critical factor is the time to first byte, which is when the browser can start doing something, not the 
+time to the 65536th byte. No one optimises that :-)
+
+So what does this mean for you? As you are focussing on popular pages, I imagine you are also focussing on dynamic 
+pages, which are simply not sent as fast as static pages. As the sites I looked at are sending multiple packets for 
+their pages, that means if you are fetching many pages simultaneously, and therefore the packets can bump into each 
+other on the ethernet.
+
+Packet collision happens when two websites send you a data packet simultaneously. At some point the input from the 
+two websites has to be co-ordinated into the single wire to your computer. When two packets arrive on top of each 
+other, the router combining them rejects both, and instructs the two senders to resend after different short delay. 
+Effectively this slows down both sites.
+
+So:
+
+1) The pages aren't generated that fast these days. 2) The ethernet has trouble coping with multiple simultaneous 
+downloads. 3) Static websites (which used to be a lot more common) are much faster and use less packets than dynamic 
+websites.
+
+This all means that maxing your connection is really hard.
+
+You might try the same test I did of putting up 1000 64Kb files and seeing how fast your code can download them. 
+For me, your code worked just fine.
+share|improve this answer
+answered Apr 16 '11 at 22:00
+Simon G.
+4,8441421
+
+    Simon, I increased the batch size to 300 URLs and I got them in 60 seconds... so I'm getting better: 5 URLs per 
+second. The literature I'm referencing is also reading the first 64KB. Nutch seems to be doing really good too: 40 
+pages per second. Now I set my iniatial batch of URLs to 1000 to see if there is a performance increase yet again. 
+– Kiril Apr 16 '11 at 22:39
+    I added 1024 URLs now and with the same code it's up to 21 pages per second now (fetches the 1024 in ~47 
+seconds). – Kiril Apr 16 '11 at 23:38
+
+------------------------------------------------------------------------------------
+
+
+
+use java thread to download large number of web pages
+	
+Rate this: 	
+	 
+	
+Please Sign up or sign in to vote.
+See more:
+Java
+Hello, I face a problem when I crawl lots of web pages(there are more than 50,000 url to process), it excute very 
+slow,so I want to refactor it with thread,can anybody give some idea,thank you very much!
+Hide   Expand   Copy Code
+
+import ......
+public class Down2011CaseMeshTread extends Thread {
+	
+    public static int count = 0;
+    public static List<String> docDoiList = getCaseDoiList2();
+    private static URL url;  
+    private static String doi;
+    static int BUFFER_SIZE = 1024*10;
+    
+    public Down2011CaseMeshTread(String doi) throws MalformedURLException{
+    	String urlStr = "http://www.codeproject.com/" + doi;
+    	this.url = new URL(urlStr);
+    	this.doi = doi;
+    }
+    
+    public static Connection getConnection() throws Exception {
+        String driver = "com.mysql.jdbc.Driver";
+        String url = "jdbc:mysql://192.168.1.102:3306/clef11";
+        String username = "root";
+        String password = "111111";
+        Class.forName(driver);
+        Connection conn = DriverManager.getConnection(url, username, password);
+        return conn;
+      }
+    
+    public static String getDocNameByDoi(String docDoi){
+        ResultSet rs = null;
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        String docName = null;
+        try {
+          conn = getConnection();
+          String query = "select filename from casebase where doi = ?";
+          pstmt = conn.prepareStatement(query); // create a statement
+          pstmt.setString(1, docDoi); // set input parameter
+          rs = pstmt.executeQuery();
+          while(rs.next()){
+        	  String name = rs.getNString(1);
+        	  docName = name.subSequence(0, name.lastIndexOf(".")).toString();
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+        } finally {
+          try {
+            rs.close();
+            pstmt.close();
+            conn.close();
+          } catch (SQLException e) {
+            e.printStackTrace();
+          }
+        }
+		return docName;
+    }
+    
+	public void Test() throws IOException, InterruptedException{
+		
+		StringBuffer sb = null;
+		BufferedReader in = null;
+		BufferedWriter out = null;
+		try {
+			 sb = new StringBuffer();
+			 int ch =0;
+			 URLConnection conn = (HttpURLConnection)url.openConnection();
+			 conn.setRequestProperty("User-Agent", "Mozilla/4.76 (compatible; MSIE 5.0; Windows NT; DigExt)");
+			 conn.setDoOutput(true);
+			 conn.setConnectTimeout(1000*60*10);
+			 in = new BufferedReader(new InputStreamReader(url.openStream()));
+		     FileOutputStream fo = new FileOutputStream("/home/boge/workspace1/IDF/case_mesh/" + getDocNameByDoi(doi));
+			 OutputStreamWriter writer = new OutputStreamWriter(fo, "utf-8");
+			 out = new BufferedWriter(writer);
+			 while (!in.ready())
+			 {
+			      Thread.sleep(500); // wait for stream to be ready.
+			 }
+			 char[] buffer = new char[BUFFER_SIZE]; 
+	                 int charsRead = 0;
+	                 while ( (charsRead = in.read(buffer, 0, BUFFER_SIZE)) != -1 ) {
+	                 out.write(buffer, 0, charsRead);
+	         }
+		 out.close();
+		 in.close();
+	    }catch(Exception e){
+	    	e.printStackTrace();
+	    }
+	}
+	
+	public void run(){
+		try {
+			Test();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public static List<String> getCaseDoiList2(){
+		List<String> docDoiList = new LinkedList<String>();
+		BufferedReader br = null;
+		try{
+			br = new BufferedReader(new InputStreamReader(new FileInputStream("/home/boge/5.28.3")));
+			String line = null;
+			while((line = br.readLine())!=null){
+				docDoiList.add(line.trim());
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+		return docDoiList;
+	}
+	
+	public static List<String> getFiles(String fileName) {
+		List<String> fileList = new ArrayList<String>();
+               File directory = new File(fileName);
+               for (File file : directory.listFiles()) {
+        	  if (file.isFile() && !file.isHidden()) {
+        		fileList.add(file.getName());
+        	}
+        }
+        return fileList;	
+	}
+	
+	public static void main(String args[]) throws MalformedURLException{
+		List<String> filedowns = getFiles("/home/boge/workspace1/IDF/case_mesh");
+		for(String docDoi : docDoiList){
+			if(filedowns.contains(getDocNameByDoi(docDoi))){
+				continue;
+			}else{
+				Down2011CaseMeshTread down = new Down2011CaseMeshTread(docDoi);
+				down.start();
+			}
+		}
+	}
+}
+
+
+
+But this code can work correctly, can you help me! :)
+Posted 30-May-11 17:15pm
+Add a Solution
+1 solution
+	
+Rate this: 		
+	 
+		
+Solution 1
+You can use the ThreadPoolExecutor to split your application's payload into Runnable tasks.
+Your code is a bit too long for me to clean up so I'll just show you an example of how to download web pages in 
+parallel using this approach;
+
+Hide   Expand   Copy Code
+
+package threadtest;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+public class Program {
+  
+  private class Downloader implements Runnable {
+    private final URL url;
+    
+    public Downloader(URL url) {
+      this.url = url;
+    }
+    
+    private String readAll(Reader reader) throws IOException {
+      StringBuilder builder = new StringBuilder();
+      int read = 0;
+      while((read = reader.read()) != -1) {
+        builder.append((char)read);
+      }
+      return builder.toString();
+    }
+    
+    @Override
+    public void run() {
+      try {
+        Reader reader = null;
+        try {
+          reader = new BufferedReader(new InputStreamReader(url.openStream()));
+          String result = readAll(reader);
+          System.out.printf("Read %d characters from %s\n", result.length(), url);
+        }
+        finally {
+          if (reader != null) 
+              reader.close();
+        }        
+      }
+      catch(IOException e) {
+        System.err.println(e);
+      }
+    }
+  }
+  
+  
+  public void runIt() throws MalformedURLException {
+    BlockingQueue<Runnable> runnables = new ArrayBlockingQueue<Runnable>(1024);
+    ThreadPoolExecutor executor = new ThreadPoolExecutor(8, 16, 60, TimeUnit.SECONDS, runnables);
+    
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    executor.submit(new Downloader(new URL("http://www.google.com")));
+    
+    executor.shutdown();
+  }
+  public static void main(String[] args) throws IOException {
+    
+    Program program = new Program();
+    program.runIt();
+    
+    System.in.read();
+  }
+}
+
+
+
+
+Hope this helps,
+Fredrik Bornander
+  Permalink  
+Posted 30-May-11 21:48pm
+Fredrik Bornander114.1K
+Comments
+tiancehngbo 31-May-11 21:57pm
+   
+thank you very much , I tried it with
+
+ExecutorServiceexe = Executors.newFixedThreadPool(POOL_SIZE);
+
+But I face the them problem that after download 1000 pages ,it goes to error:
+java.io.IOException: Premature EOF
+and then , it goes the error:
+Connection time out
+I don't what's the problem ,maybe you solution can help ,I have a try now!
+Fredrik Bornander 2-Jun-11 4:52am
+   
+Without seeing your code there's no way to tell you what is wrong.
+
+--------------------------------------------------------------------------------------
+
+ Java Producer - Consumer Examples Using BlockingQueue
+
+Details
+    Last Updated on 29 November 2017   |    Print  Email
+
+In this tutorial, we are about to show you how to use Queue to solve real life problems in programming. Typically, 
+queue is used to implement producer-consumer scenarios. The following kinds of program will need to use queue:
+
+- Chat applications: Messages are put into a queue. When you are sending a message, you are the producer; and your 
+friend who reads the message, is the consumer. Messages need to be kept in queue because of network latency. 
+Imagine network connection dropped when you are trying to send a message. In this case, the message is still in 
+the queue, awaiting the receiver to consume upon the connection becomes available.
+
+- Online help desk applications: Imagine a company has 5 persons working as customer support staffs. They chat 
+with clients through a help desk application. They can talk with maximum 5 clients at a time, so other clients 
+will be queued up. When a staff finishes serving a client, the next client in the queue is served next.
+
+- Real-time processing applications such as screen recorder. The logic behind this kind of application is there 
+are two threads working concurrently: The producer thread captures screenshots constantly and puts the images into 
+a queue; the consumer thread takes the images from the queue to process the video.
+
+- And much more.
+Above we name only few types of application in which we need to use queue. Remember using queue when you need to 
+implement producer-consumer processing.
+
+In Java, using a BlockingQueue implementation is a good choice, as its put(e) method let the producer thread waits 
+for space to become available in the queue, and its take() method let the consumer thread waits for an element 
+become available in the queue.
+
+ 
+
+1. Producer - Consumer Pseudo Code
+The following is a pseudo-code of a typical producer-consumer application:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+	
+class Producer implements Runnable {
+ 
+   private final BlockingQueue queue;
+ 
+   Producer(BlockingQueue q) { queue = q; }
+ 
+   public void run() {
+ 
+       while (true) { queue.put(produce()); }
+ 
+   }
+ 
+   Object produce() { ... }
+}
+ 
+class Consumer implements Runnable {
+ 
+   private final BlockingQueue queue;
+ 
+   Consumer(BlockingQueue q) { queue = q; }
+ 
+   public void run() {
+ 
+       while (true) { consume(queue.take()); }
+ 
+   }
+ 
+   void consume(Object x) { ... }
+}
+ 
+class Program {
+   void main() {
+ 
+     BlockingQueue q = new SomeBlockingQueueImplementation();
+ 
+     Producer p = new Producer(q);
+     Consumer c1 = new Consumer(q);
+     Consumer c2 = new Consumer(q);
+ 
+     new Thread(p).start();
+     new Thread(c1).start();
+     new Thread(c2).start();
+   }
+}
+Here, the Producer class is a thread which constantly produces objects and put them into the queue. In practice, 
+we should specify condition to exit the loop, such as closing/shutdown the program or a maximum number of objects 
+reached.
+
+The Consumer class is another thread which constantly takes objects from the queue to process. In practice, we 
+should specify condition to stop this thread by checking the queue for a special object (null, false or special 
+value), for example:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+	
+while (true) {
+    Integer number = queue.take();
+ 
+    if (number == -1) {
+        break;
+    }
+ 
+    consume(number);
+ 
+}
+And in this case, the producer is responsible to put this special object into the queue to indicate there are no 
+more elements to process.
+
+Let’s look at real examples.
+
+ 
+
+2. One Producer - One Consumer Example
+This is a program that creates one producer thread and one consumer thread:
+
+* Producer:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+	
+import java.util.*;
+import java.util.concurrent.*;
+ 
+/**
+ * Producer using BlockingQueue example
+ * @author www.codejava.net
+ *
+ */
+public class Producer implements Runnable {
+    private BlockingQueue<Integer> queue;
+ 
+    public Producer (BlockingQueue<Integer> queue) {
+        this.queue = queue;
+    }
+ 
+    public void run() {
+        try {
+            for (int i = 0; i < 10; i++) {
+                queue.put(produce());
+ 
+                Thread.sleep(500);
+            }
+ 
+            queue.put(-1);  // indicates end of producing
+ 
+            System.out.println("Producer STOPPED.");
+ 
+        } catch (InterruptedException ie) {
+            ie.printStackTrace();
+        }
+    }
+ 
+    private Integer produce() {
+        Integer number = new Integer((int) (Math.random() * 100));
+ 
+ 
+        System.out.println("Producing number => " + number);
+ 
+        return number;
+    }
+}
+ 
+
+* Consumer:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+	
+import java.util.*;
+import java.util.concurrent.*;
+ 
+/**
+ * Consumer using BlockingQueue example
+ * @author www.codejava.net
+ *
+ */
+public class Consumer implements Runnable {
+    private BlockingQueue<Integer> queue;
+ 
+    public Consumer(BlockingQueue<Integer> queue) {
+        this.queue = queue;
+    }
+ 
+    public void run() {
+        try {
+ 
+            while (true) {
+                Integer number = queue.take();
+ 
+                if (number == null || number == -1) {
+                    break;
+                }
+ 
+                consume(number);
+ 
+                Thread.sleep(1000);
+            }
+ 
+            System.out.println("Consumer STOPPED.");
+        } catch (InterruptedException ie) {
+            ie.printStackTrace();
+        }
+    }
+ 
+    private void consume(Integer number) {
+ 
+        System.out.println("Consuming number <= " + number);
+ 
+    }
+}
+ 
+
+* Test Program:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+	
+import java.util.*;
+import java.util.concurrent.*;
+ 
+/**
+ * Producer-Consumer test example (1 producer thread - 1 consumer thread)
+ * @author www.codejava.net
+ *
+ */
+public class ProducerConsumerTest {
+    public static void main(String[] args) {
+        BlockingQueue<Integer> queue = new ArrayBlockingQueue<>(20);
+ 
+        Thread producer = new Thread(new Producer(queue));
+ 
+        Thread consumer = new Thread(new Consumer(queue));
+ 
+        producer.start();
+        consumer.start();
+ 
+    }
+}
+Compile and run this program would print the following output:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+	
+Producing number => 21
+Consuming number <= 21
+Producing number => 90
+Producing number => 51
+Consuming number <= 90
+Producing number => 23
+Producing number => 61
+Consuming number <= 51
+Producing number => 63
+Producing number => 75
+Consuming number <= 23
+Producing number => 99
+Consuming number <= 61
+Producing number => 59
+Producing number => 31
+Producer STOPPED.
+Consuming number <= 63
+Consuming number <= 75
+Consuming number <= 99
+Consuming number <= 59
+Consuming number <= 31
+Consumer STOPPED.
+ 
+
+3. One Producer - Multiple Consumers Example
+In case there are multiple consumer threads, we should use the poll(time, unit) method to take elements from the 
+head of the queue. This method does not wait forever like the take() method. Instead, it just waits for a specified 
+of time. The lock is released either when an element found or the time out period expires. This avoids deadlock 
+among different consumer threads.
+
+* Producer: same code as above.
+
+* Consumer:
+
+We add some code to help identify which thread is running in the output, and replace the take() method by the 
+poll(time, unit) method. Here’s the code:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+	
+import java.util.*;
+import java.util.concurrent.*;
+ 
+/**
+ * Consumer using BlockingQueue example
+ * @author www.codejava.net
+ *
+ */
+public class Consumer implements Runnable {
+    private BlockingQueue<Integer> queue;
+    private String threadId;
+ 
+    public Consumer(BlockingQueue<Integer> queue) {
+        this.queue = queue;
+    }
+ 
+    public void run() {
+        threadId = "Consumer-" + Thread.currentThread().getId();
+        try {
+ 
+            while (true) {
+                Integer number = queue.poll(5, TimeUnit.SECONDS);
+ 
+                if (number == null || number == -1) {
+                    break;
+                }
+ 
+                consume(number);
+ 
+                Thread.sleep(1000);
+            }
+ 
+            System.out.println(threadId + " STOPPED.");
+        } catch (InterruptedException ie) {
+            ie.printStackTrace();
+        }
+    }
+ 
+    private void consume(Integer number) {
+ 
+        System.out.println(threadId + ": Consuming number <= " + number);
+ 
+    }
+}
+Here, the consumer thread can wait maximum 5 seconds for element become available in the queue.  
+
+ 
+
+* Test Program:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+	
+import java.util.*;
+import java.util.concurrent.*;
+ 
+/**
+ * Producer-Consumer test example (1 producer thread - N consumer threads)
+ * @author www.codejava.net
+ *
+ */
+public class ProducerConsumerTest {
+    public static void main(String[] args) {
+        BlockingQueue<Integer> queue = new ArrayBlockingQueue<>(20);
+ 
+        Thread producer = new Thread(new Producer(queue));
+ 
+        Thread consumer1 = new Thread(new Consumer(queue));
+        Thread consumer2 = new Thread(new Consumer(queue));
+        Thread consumer3 = new Thread(new Consumer(queue));
+ 
+        producer.start();
+ 
+        consumer1.start();
+        consumer2.start();
+        consumer3.start();
+ 
+    }
+}
+Here, we create 3 consumer threads. Let run this program, it would print the following output:
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+	
+Producing number => 34
+Consumer-11: Consuming number <= 34
+Producing number => 79
+Consumer-12: Consuming number <= 79
+Producing number => 43
+Consumer-13: Consuming number <= 43
+Producing number => 44
+Consumer-11: Consuming number <= 44
+Producing number => 49
+Consumer-12: Consuming number <= 49
+Producing number => 28
+Consumer-13: Consuming number <= 28
+Producing number => 2
+Consumer-11: Consuming number <= 2
+Producing number => 92
+Consumer-12: Consuming number <= 92
+Producing number => 89
+Consumer-13: Consuming number <= 89
+Producing number => 85
+Consumer-11: Consuming number <= 85
+Producer STOPPED.
+Consumer-12 STOPPED.
+Consumer-13 STOPPED.
+Consumer-11 STOPPED.
+We hope these examples give you the ideas and help you implement similar scenarios in your program. Feel free to 
+help us improve the code by replying in the comments section.

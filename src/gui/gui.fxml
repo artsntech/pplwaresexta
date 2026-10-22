@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressBar?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox prefHeight="340.0" prefWidth="520.0" xmlns="http://javafx.com/javafx/8.0.141" xmlns:fx="http://javafx.com/fxml/1" fx:controller="gui.PplwareSextaGUI">
+  <children>
+    <AnchorPane maxHeight="-1.0" maxWidth="-1.0" prefHeight="-1.0" prefWidth="-1.0" VBox.vgrow="ALWAYS">
+         <children>
+            <Label layoutX="11.0" layoutY="14.0" prefHeight="17.0" prefWidth="40.0" text="Link" />
+            <TextField fx:id="tfLink" disable="true" editable="false" layoutX="60.0" layoutY="10.0" prefHeight="25.0" prefWidth="269.0" id="link" />
+            <TextField fx:id="tfNumero" alignment="CENTER_RIGHT" layoutX="337.0" layoutY="10.0" prefHeight="25.0" prefWidth="48.0" id="numero" />
+            <Label layoutX="11.0" layoutY="44.0" text="Destino" />
+            <TextField fx:id="tfDestino" disable="true" editable="false" layoutX="59.0" layoutY="40.0" prefHeight="25.0" prefWidth="269.0" id="destino" />
+            <Button fx:id="btPasta" layoutX="337.0" layoutY="40.0" mnemonicParsing="false" onAction="#accaoBotaoPasta" prefHeight="25.0" prefWidth="48.0" text="Pasta" />
+            <Label layoutX="11.0" layoutY="75.0" text="Página Inicial" />
+            <TextField fx:id="tfPaginaInicial" alignment="CENTER_RIGHT" layoutX="87.0" layoutY="71.0" prefHeight="25.0" prefWidth="48.0" id="pi" />
+            <Label layoutX="162.0" layoutY="74.0" text="Página Final" />
+            <TextField fx:id="tfPaginaFinal" alignment="CENTER_RIGHT" layoutX="234.0" layoutY="71.0" prefHeight="25.0" prefWidth="48.0" id="pf" />
+            <ProgressBar fx:id="pbBarraProgresso" layoutX="11.0" layoutY="110.0" prefHeight="18.0" prefWidth="508.0" progress="0.0" id="progresso" />
+            <TextArea fx:id="taInfo" editable="false" layoutX="11.0" layoutY="138.0" prefHeight="200.0" prefWidth="508.0" id="info" />
+            <Button fx:id="btIniciar" disable="true" layoutX="399.0" layoutY="10.0" mnemonicParsing="false" onAction="#accaoBotaoIniciar" prefHeight="86.0" prefWidth="120.0" text="Iniciar" id="iniciar" />
+            <Label fx:id="lPercentagem" alignment="CENTER" layoutX="253.0" layoutY="111.0" prefHeight="17.0" prefWidth="40.0" id="percentagem" />
+         </children>
+    </AnchorPane>
+  </children>
+</VBox>

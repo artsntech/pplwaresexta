@@ -1,0 +1,12 @@
+# --- Eclipse Metadata ---
+.classpath
+.project
+.settings/
+
+# --- Compiled Java Files ---
+bin/
+*.class
+
+# --- Temporary/Output Files ---
+*.log
+Links.txt
