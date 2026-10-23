@@ -62,7 +62,7 @@ PplwareSexta/
 
 *   **Operating Systems:** Windows 7, 8, 10, or 11 | Linux | macOS.
 *   **Java Environment:** Built for **Java SE 8 (JDK 1.8)** ecosystems (which natively bundle JavaFX modules).
-*   **Portable Launch Option (Windows):** Because modern Java runtimes no longer include JavaFX UI modules by default, running the application on newer systems can be tricky. To preserve full portability and avoid installing software system-wide, you can run the JARs using **[jdkPortable (32-bit/64-bit)](https://portableapps.com)** on the PortableApps platform. A ready-to-use launch script (`jars/PplwareSexta_GUI.bat`) is included to start the desktop experience instantly on Windows environments.
+*   **Portable Launch Option (Windows):** Because modern Java runtimes no longer include JavaFX UI modules by default, running the application on newer systems can be tricky. To preserve full portability and avoid installing software system-wide, you can run the JARs using **[jdkPortable (32-bit/64-bit)](https://portableapps.com/apps/utilities/jdkportable)** on the PortableApps platform. A ready-to-use launch script (`jars/PplwareSexta_GUI.bat`) is included to start the desktop experience instantly on Windows environments.
 *   **Terminal Launch (Linux & macOS):** To execute the application on Unix-based systems, open the terminal, navigate to the `jars/` folder, and run:
     *   **GUI Dashboard:** `java -jar PplwareSexta_GUI.jar`
     *   **Concurrent CLI:** `java -jar PplwareSexta_Rapidofas.jar`
